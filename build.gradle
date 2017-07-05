@@ -14,7 +14,7 @@ version = '0.5.0'
 group = 'org.keeber'
 sourceCompatibility  = 1.6
 targetCompatibility  = 1.6
-archivesBaseName = 'esprit-api-client'
+archivesBaseName = 'simple-rest'
 
 repositories { mavenCentral();jcenter() }
 
