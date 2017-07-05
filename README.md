@@ -64,6 +64,6 @@ Rest.Response<String> response = request.post(new Rest.Form().put("param1", "myv
 Rest.Response<InputStream> response = request.post(new Rest.Form().put("param1", "some other value"), InputStream.class);
 ```
 
-# Quickstart
+# TODO
 
 Javadoc
