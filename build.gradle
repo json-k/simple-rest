@@ -1,0 +1,65 @@
+apply plugin: 'java'
+apply plugin: 'com.bmuschko.nexus'
+
+buildscript {
+     repositories {
+         jcenter()
+     }
+     dependencies {
+         classpath 'com.bmuschko:gradle-nexus-plugin:2.3.1'
+     }
+ }
+
+version = '0.5.0'
+group = 'org.keeber'
+sourceCompatibility  = 1.6
+targetCompatibility  = 1.6
+archivesBaseName = 'esprit-api-client'
+
+repositories { mavenCentral();jcenter() }
+
+dependencies{
+	compile 'com.google.code.gson:gson:2.8.1'
+}	
+
+javadoc {
+	failOnError = false
+}
+
+
+
+ modifyPom {
+     project {
+         name 'Java REST Client'
+         description 'A very simple REST client.'
+         url 'https://github.com/json-k/simple-rest'
+
+         scm {
+             url 'https://github.com/json-k/simple-rest'
+             connection 'scm:svn:https://github.com/json-k/simple-rest.git'
+             developerConnection 'scm:git:https://github.com/json-k/simple-rest.git'
+         }
+
+         licenses {
+             license {
+                 name 'The Apache Software License, Version 2.0'
+                 url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                 distribution 'repo'
+             }
+         }
+
+         developers {
+             developer {
+                 id 'json-k'
+                 name 'json-k'
+                 email 'jason@keeber.org'
+             }
+         }
+     }
+ }
+
+
+
+
+
+
