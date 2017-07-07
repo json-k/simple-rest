@@ -441,7 +441,11 @@ public class Rest {
     private Map<String, Object> data = new HashMap<String, Object>();
 
     public Form put(String key, String value) {
-      data.put(key, utils.encode(value));
+      try {
+        data.put(key, URLEncoder.encode(value, utils.UTF_8));
+      } catch (UnsupportedEncodingException e) {
+        throw new RuntimeException(e);
+      }
       return this;
     }
 

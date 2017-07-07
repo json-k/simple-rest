@@ -10,7 +10,7 @@ buildscript {
      }
  }
 
-version = '0.5.0'
+version = '0.5.1'
 group = 'org.keeber'
 sourceCompatibility  = 1.6
 targetCompatibility  = 1.6
