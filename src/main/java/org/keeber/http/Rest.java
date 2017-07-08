@@ -139,8 +139,8 @@ public class Rest {
               wt.append("--" + boundary).append(utils.LF);
               wt.append("Content-Disposition: form-data; name=\"").append(entry.getKey()).append("\"").append(utils.LF);
               wt.append("Content-Type: text/plain; charset=").append(utils.UTF_8).append(utils.LF).append(utils.LF);
-              wt.append(entry.getValue() + "").append(utils.LF);
-              wt.flush();
+              wt.append(entry.getValue() instanceof String ? entry.getValue() + "" : serializer().toJson(entry.getValue()));
+              wt.append(utils.LF).flush();
             }
           }
           wt.append("--" + boundary + "--").append(utils.LF).flush();
@@ -440,12 +440,8 @@ public class Rest {
   public static class Form {
     private Map<String, Object> data = new HashMap<String, Object>();
 
-    public Form put(String key, String value) {
-      try {
-        data.put(key, URLEncoder.encode(value, utils.UTF_8));
-      } catch (UnsupportedEncodingException e) {
-        throw new RuntimeException(e);
-      }
+    public Form put(String key, Object value) {
+      data.put(key, value);
       return this;
     }
 
