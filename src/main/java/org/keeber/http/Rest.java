@@ -42,6 +42,13 @@ public class Rest {
     this.baseUrl = url;
   }
 
+
+  /**
+   * Create a rest instance with this endpoint.
+   * 
+   * @param url the endpoint (typically starting with http:// or https://)
+   * @return Rest
+   */
   public static Rest withURL(String url) {
     return new Rest(url);
   }
@@ -50,20 +57,45 @@ public class Rest {
     POST, GET, PUT, DELETE, HEAD;
   }
 
+  /**
+   * Add a header to this client - headers will be copied to every request created from this client.
+   * 
+   * @param key header key eg: "Accept", "Content-Type"
+   * @param value header value eg: "application/json"
+   * @return Rest
+   */
   public Rest header(String key, String value) {
     headers.put(key, value);
     return this;
   }
 
+  /**
+   * Removed the designated header from this client (already created requests will be unaffected).
+   * 
+   * @param key header key to remove eg: "User-agent"
+   * @return Rest
+   */
   public Rest clear(String key) {
     headers.remove(key);
     return this;
   }
 
+  /**
+   * Clear the basic authorization for this client.
+   * 
+   * @return Rest
+   */
   public Rest nobasic() {
     return clear(AUTH);
   }
 
+  /**
+   * Set basic authorization for this client.
+   * 
+   * @param username User name.
+   * @param password Password.
+   * @return Rest
+   */
   public Rest basic(String username, String password) {
     return header(AUTH, "Basic " + utils.encode(username + ":" + password));
   }
@@ -83,11 +115,28 @@ public class Rest {
     return this.serializer == null ? serializer = new GsonBuilder().setPrettyPrinting().create() : serializer;
   }
 
+  /**
+   * Set the Gson serializer for object operations.
+   * 
+   * @param serializer Gson instance to use.
+   * @return Rest
+   */
   public Rest serializer(Gson serializer) {
     this.serializer = serializer;
     return this;
   }
 
+  /**
+   * Create a request from this client. The provided URL is appended to the clients endpoint - it
+   * may also include route params. Headers from the client (including auth) are copied to the
+   * request on creation.
+   * 
+   * <p>
+   * Requests executions (get(), post(), etc... methods) are thread safe.
+   * 
+   * @param url the endpoint.
+   * @return Request
+   */
   public Request request(String url) {
     return new Request(url);
   }
@@ -208,24 +257,60 @@ public class Rest {
       this.url = url;
     }
 
+    /**
+     * Add a header to this request - exiting header(s) with the same key will be overwritten.
+     * 
+     * @param key header key eg: "Accept", "Content-Type"
+     * @param value header value eg: "application/json"
+     * @return Request
+     */
     public Request header(String key, String value) {
       headers.put(key, value);
       return this;
     }
 
+    /**
+     * Removed the designated header from this request.
+     * 
+     * @param key header key to remove eg: "User-agent"
+     * @return Request
+     */
     public Request clear(String key) {
       headers.remove(key);
       return this;
     }
 
+    /**
+     * Set basic authorization for this request.
+     * 
+     * @param username User name.
+     * @param password Password.
+     * @return Request
+     */
     public Request basic(String username, String password) {
       return header(AUTH, "Basic " + utils.encode(username + ":" + password));
     }
 
+    /**
+     * Remove basic authorization from this request.
+     * 
+     * @return Request
+     */
     public Request nobasic() {
       return clear(AUTH);
     }
 
+    /**
+     * Add query parameters to this request - this method will perform URL encoding.
+     * 
+     * <p>
+     * Query parameters are cumulative (ie: they do not use an underlying map) - however them may
+     * contain (or consist entirely of) route parameters in the form of {myparam}.
+     * 
+     * @param name of the parameter
+     * @param value of the parameter
+     * @return Request
+     */
     public Request query(String name, String value) {
       try {
         query = (query == null ? "?" : query + "&") + name + "=" + URLEncoder.encode(value, utils.UTF_8);
@@ -236,10 +321,15 @@ public class Rest {
     }
 
     /**
-     * Execute a GET transformed to the expected type.
+     * Execute a GET transformed to the expected type with the specified route params.
+     * 
+     * <p>
+     * To replace the route param {id} in the URL (or query string) the route params
+     * "id","myidvalue" would be provided.
      * 
      * @param type expected return type or class.
-     * @return
+     * @param routes optional string list of routes.
+     * @return Response
      * @throws RestException
      */
     public <T> Response<T> get(Type type, String... routes) throws RestException {
@@ -247,9 +337,10 @@ public class Rest {
     }
 
     /**
-     * Execute a GET as a JsonElement
+     * Execute a GET as a JsonElement.
      * 
-     * @return
+     * @param routes optional string list of routes.
+     * @return Response
      * @throws RestException
      */
     public Response<JsonElement> get(String... routes) throws RestException {
@@ -257,70 +348,169 @@ public class Rest {
     }
 
     /**
-     * Stream a GET
+     * Stream a GET.
      * 
-     * @return
+     * @param routes optional string list of routes.
+     * @return Response
      * @throws RestException
      */
     public Response<InputStream> stream(String... routes) throws RestException {
       return get(InputStream.class, routes);
     }
 
+    /**
+     * Execute a HEAD transformed to the expected type with the specified route params.
+     * 
+     * @param type expected return type or class.
+     * @param routes optional string list of routes.
+     * @return Response
+     * @throws RestException
+     */
     public <T> Response<T> head(Type type, String... routes) throws RestException {
       return execute(this, null, Method.HEAD, type, routes);
     }
 
+    /**
+     * Execute a HEAD as a JsonElement.
+     * 
+     * @param routes optional string list of routes.
+     * @return Response
+     * @throws RestException
+     */
     public Response<JsonElement> head(String... routes) throws RestException {
       return head(JsonElement.class, routes);
     }
 
+    /**
+     * Execute a POST with the provided object as the body transformed to the type with the optional
+     * route params.
+     * 
+     * @param body for the post - can be a Rest.Form object for a multi-part post.
+     * @param type expected return type or class.
+     * @param routes optional string list of routes.
+     * @return Response
+     * @throws RestException
+     */
     public <T> Response<T> post(Object body, Type type, String... routes) throws RestException {
       return execute(this, body, Method.POST, type, routes);
     }
 
+    /**
+     * Execute a POST as a JSONElement.
+     * 
+     * @param body for the post - can be a Rest.Form object for a multi-part post.
+     * @param routes optional string list of routes.
+     * @return Response
+     * @throws RestException
+     */
     public Response<JsonElement> post(Object body, String... routes) throws RestException {
       return post(body, JsonElement.class, routes);
     }
 
+    /**
+     * Execute a PUT with the provided object as the body transformed to the type with the optional
+     * route params.
+     * 
+     * @param body for the post - can be a Rest.Form object for a multi-part post.
+     * @param type expected return type or class.
+     * @param routes optional string list of routes.
+     * @return Response
+     * @throws RestException
+     */
     public <T> Response<T> put(Object body, Type type, String... routes) throws RestException {
       return execute(this, body, Method.PUT, type, routes);
     }
 
+    /**
+     * Execute a PUT as a JSONElement.
+     * 
+     * @param body for the post - can be a Rest.Form object for a multi-part post.
+     * @param routes optional string list of routes.
+     * @return Response
+     * @throws RestException
+     */
     public Response<JsonElement> put(Object body, String... routes) throws RestException {
       return put(body, JsonElement.class, routes);
     }
 
+    /**
+     * Execute a DELETE as transformed into the provided type.
+     * 
+     * @param type expected return type or class.
+     * @param routes optional string list of routes.
+     * @return Response
+     * @throws RestException
+     */
     public <T> Response<T> delete(Type type, String... routes) throws RestException {
       return execute(this, null, Method.DELETE, type, routes);
     }
 
+    /**
+     * Execute a DELETE as a JSONElement.
+     * 
+     * @param routes
+     * @param routes optional string list of routes.
+     * @return Response
+     * @throws RestException
+     */
     public Response<JsonElement> delete(String... routes) throws RestException {
       return delete(JsonElement.class, routes);
     }
 
   }
-
+  /**
+   * An HTTP response class.
+   * 
+   * @author Jason Keeber <jason@keeber.org>
+   *
+   * @param <T>
+   */
   public class Response<T> {
     private T result;
     private int code, length;
     private String message;
 
+    /**
+     * Does this response contain a non-null value for type T?
+     * 
+     * @return true is the result is present.
+     */
     public boolean hasResult() {
       return result != null;
     }
 
+    /**
+     * The payload of the response.
+     * 
+     * @return result of type T.
+     */
     public T getResult() {
       return result;
     }
 
+    /**
+     * The code of the response ie: 200 == OK
+     * 
+     * @return HTTP response code.
+     */
     public int getCode() {
       return code;
     }
 
+    /**
+     * The contents length (if available).
+     * 
+     * @return the content length.
+     */
     public int getLength() {
       return length;
     }
 
+    /**
+     * The response message.
+     * 
+     * @return eg: OK
+     */
     public String getMessage() {
       return message;
     }
@@ -447,15 +637,36 @@ public class Rest {
       return buffer.toString();
     }
   }
-
+  /**
+   * A HTTP Form representation.
+   * 
+   * @author Jason Keeber <jason@keeber.org>
+   *
+   */
   public static class Form {
     private Map<String, Object> data = new HashMap<String, Object>();
 
+    /**
+     * Add the object to this form with the provided key. None-string objects will be serialized
+     * (using the Rest client serializer) to JSON objects when the form is POSTed.
+     * 
+     * @param key the form name.
+     * @param value the form value.
+     * @return Form
+     */
     public Form put(String key, Object value) {
       data.put(key, value);
       return this;
     }
 
+    /**
+     * Add the provided stream as a file to the Form.
+     * 
+     * @param key the form name.
+     * @param filename the file upload name.
+     * @param stream the file content.
+     * @return Form
+     */
     public Form put(String key, String filename, InputStream stream) {
       data.put(key, new FileEntry(filename, stream));
       return this;
