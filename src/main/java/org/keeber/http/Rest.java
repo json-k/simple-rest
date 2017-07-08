@@ -68,6 +68,17 @@ public class Rest {
     return header(AUTH, "Basic " + utils.encode(username + ":" + password));
   }
 
+  /**
+   * Sets headers for JSON communication (Accept & Content-Type).
+   * 
+   * @return Rest
+   */
+  public Rest json() {
+    header("Accept", "application/json");
+    header("Content-Type", "application/json");
+    return this;
+  }
+
   private Gson serializer() {
     return this.serializer == null ? serializer = new GsonBuilder().setPrettyPrinting().create() : serializer;
   }

@@ -20,6 +20,7 @@ repositories { mavenCentral();jcenter() }
 
 dependencies{
 	compile 'com.google.code.gson:gson:2.8.1'
+	testCompile 'junit:junit:4.12'
 }	
 
 javadoc {
