@@ -23,7 +23,7 @@ The project is available in the Maven Central Repository. For your Gradle build:
 Create a client:
 
 ```java
-Rest rest=Rest.withURL("http://httpbin.org/").header("User-Agent", "JSON-K");
+Rest.Client rest=Rest.newClient("http://httpbin.org/").header("User-Agent", "JSON-K");
 ```
 
 Clients are creataed using a base URL - handy for a fixed endpoint.
@@ -31,7 +31,7 @@ Clients are creataed using a base URL - handy for a fixed endpoint.
 Make a request and call get: the endpoint is the base plus request URL (in this case "http://httpbin.org/get").
 
 ```java
-Rest.Response<JsonElement> response=rest.request("get").get();
+Rest.Client.Response<JsonElement> response=rest.request("get").get();
 if(response.hasResult()){
 	...
 }
@@ -40,8 +40,8 @@ if(response.hasResult()){
 Hint: request objects can be reused (they should be thread safe too). Also different route params can be called with each call (route params also swap into the query string too (because why not)).
 
 ```java
-Rest.Request request = rest.request("get/{id}");
-Rest.Response<JsonElement> response = request.get("id","1234322");
+Rest.Client.Request request = rest.newRequest("get/{id}");
+Rest.Client.Response<JsonElement> response = request.get("id","1234322");
 ```
 
 Default headers are copied from the REST instance when the request is created.
@@ -49,9 +49,9 @@ Default headers are copied from the REST instance when the request is created.
 Form posts are easy, as are sending objects as the message body:
 
 ```java
-Rest.Response<JsonElement> response1 = request.post(new Rest.Form().put("param1", "myvalue"));
+Rest.Client.Response<JsonElement> response1 = request.post(new Rest.Form().put("param1", "myvalue"));
 
-Rest.Response<TotallyGreatResponse> response2 = request.put(new TotallyGreatObject());
+Rest.Client.Response<TotallyGreatResponse> response2 = request.put(new TotallyGreatObject(),TotallyGreatResponse.class);
 ```
 
 Notice that request objects can be called with different methods.
@@ -59,11 +59,11 @@ Notice that request objects can be called with different methods.
 Don't want a JSON response - ask for something else (if you ask for a Stream you can stream the response):
 
 ```java
-Rest.Response<String> response = request.post(new Rest.Form().put("param1", "myvalue"), String.class);
+Rest.Client.Response<String> response = request.post(new Rest.Form().put("param1", "myvalue"), String.class);
 
-Rest.Response<InputStream> response = request.post(new Rest.Form().put("param1", "some other value"), InputStream.class);
+Rest.Client.Response<InputStream> response = request.post(new Rest.Form().put("param1", "some other value"), InputStream.class);
 ```
 
 # TODO
 
-Javadoc
+Probably change everything again (add more unit tests).
