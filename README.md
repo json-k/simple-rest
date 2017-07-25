@@ -31,7 +31,7 @@ Clients are creataed using a base URL - handy for a fixed endpoint.
 Make a request and call get: the endpoint is the base plus request URL (in this case "http://httpbin.org/get").
 
 ```java
-Rest.Client.Response<JsonElement> response=rest.request("get").get();
+Rest.Client.Response response=rest.request("get").get();
 if(response.hasResult()){
 	...
 }
@@ -41,7 +41,7 @@ Hint: request objects can be reused (they should be thread safe too). Also diffe
 
 ```java
 Rest.Client.Request request = rest.newRequest("get/{id}");
-Rest.Client.Response<JsonElement> response = request.get("id","1234322");
+Rest.Client.Response response = request.get("id","1234322");
 ```
 
 Default headers are copied from the REST instance when the request is created.
@@ -49,19 +49,21 @@ Default headers are copied from the REST instance when the request is created.
 Form posts are easy, as are sending objects as the message body:
 
 ```java
-Rest.Client.Response<JsonElement> response1 = request.post(new Rest.Form().put("param1", "myvalue"));
+Rest.Client.Response response1 = request.post(new Rest.Form().put("param1", "myvalue"));
 
-Rest.Client.Response<TotallyGreatResponse> response2 = request.put(new TotallyGreatObject(),TotallyGreatResponse.class);
+Rest.Client.Response response2 = request.put(new TotallyGreatObject());
 ```
 
 Notice that request objects can be called with different methods.
 
-Don't want a JSON response - ask for something else (if you ask for a Stream you can stream the response):
+Basic responses should be handled automatically - content types with "text" return a String, "json" returns a JsonElement, and all others return an InputStream (please remember to close it):
 
 ```java
-Rest.Client.Response<String> response = request.post(new Rest.Form().put("param1", "myvalue"), String.class);
+Rest.Client.Response<String> response = request.post(new Rest.Form().put("param1", "myvalue");
+System.out.println(response.as(String.class);
 
-Rest.Client.Response<InputStream> response = request.post(new Rest.Form().put("param1", "some other value"), InputStream.class);
+Rest.Client.Response response = request.post(new Rest.Form().put("param1", "some other value"));
+response.as(InputStream.class);
 ```
 
 # TODO

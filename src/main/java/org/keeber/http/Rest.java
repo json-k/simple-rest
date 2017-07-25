@@ -23,7 +23,9 @@ import java.util.Map.Entry;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 
 public abstract class Rest<T> {
   protected String url;
@@ -182,69 +184,47 @@ public abstract class Rest<T> {
       }
 
       /**
-       * Execute a GET transformed to the expected type with the specified route params.
+       * Execute a GET with the specified route params.
        * 
        * <p>
        * To replace the route param {id} in the URL (or query string) the route params
        * "id","myidvalue" would be provided.
        * 
-       * @param type expected return type or class.
        * @param routes optional string list of routes.
        * @return Response
        * @throws RestException
        */
-      public <R> Response<R> get(Type type, String... routes) throws RestException {
-        return execute(this, null, Method.GET, type, routes);
+      public Response get(String... routes) throws RestException {
+        return execute(this, null, Method.GET, routes);
       }
 
       /**
-       * Execute a GET as a JsonElement.
+       * Execute a HEAD with the specified route params.
        * 
        * @param routes optional string list of routes.
        * @return Response
        * @throws RestException
        */
-      public Response<JsonElement> get(String... routes) throws RestException {
-        return get(JsonElement.class, routes);
+      public Response head(String... routes) throws RestException {
+        return execute(this, null, Method.HEAD, routes);
       }
 
+
       /**
-       * Stream a GET.
+       * Execute a POST with the provided object as the body with the optional route params.
        * 
+       * @param body for the post - can be a Rest.Form object for a multi-part post.
        * @param routes optional string list of routes.
        * @return Response
        * @throws RestException
        */
-      public Response<InputStream> stream(String... routes) throws RestException {
-        return get(InputStream.class, routes);
+      public Response post(Object body, String... routes) throws RestException {
+        return execute(this, body, Method.POST, routes);
       }
 
-      /**
-       * Execute a HEAD transformed to the expected type with the specified route params.
-       * 
-       * @param type expected return type or class.
-       * @param routes optional string list of routes.
-       * @return Response
-       * @throws RestException
-       */
-      public <R> Response<R> head(Type type, String... routes) throws RestException {
-        return execute(this, null, Method.HEAD, type, routes);
-      }
 
       /**
-       * Execute a HEAD as a JsonElement.
-       * 
-       * @param routes optional string list of routes.
-       * @return Response
-       * @throws RestException
-       */
-      public Response<JsonElement> head(String... routes) throws RestException {
-        return head(JsonElement.class, routes);
-      }
-
-      /**
-       * Execute a POST with the provided object as the body transformed to the type with the
-       * optional route params.
+       * Execute a PUT with the provided object as the body with the optional route params.
        * 
        * @param body for the post - can be a Rest.Form object for a multi-part post.
        * @param type expected return type or class.
@@ -252,70 +232,21 @@ public abstract class Rest<T> {
        * @return Response
        * @throws RestException
        */
-      public <R> Response<R> post(Object body, Type type, String... routes) throws RestException {
-        return execute(this, body, Method.POST, type, routes);
+      public Response put(Object body, String... routes) throws RestException {
+        return execute(this, body, Method.PUT, routes);
       }
 
-      /**
-       * Execute a POST as a JSONElement.
-       * 
-       * @param body for the post - can be a Rest.Form object for a multi-part post.
-       * @param routes optional string list of routes.
-       * @return Response
-       * @throws RestException
-       */
-      public Response<JsonElement> post(Object body, String... routes) throws RestException {
-        return post(body, JsonElement.class, routes);
-      }
 
       /**
-       * Execute a PUT with the provided object as the body transformed to the type with the
-       * optional route params.
-       * 
-       * @param body for the post - can be a Rest.Form object for a multi-part post.
-       * @param type expected return type or class.
-       * @param routes optional string list of routes.
-       * @return Response
-       * @throws RestException
-       */
-      public <R> Response<R> put(Object body, Type type, String... routes) throws RestException {
-        return execute(this, body, Method.PUT, type, routes);
-      }
-
-      /**
-       * Execute a PUT as a JSONElement.
-       * 
-       * @param body for the post - can be a Rest.Form object for a multi-part post.
-       * @param routes optional string list of routes.
-       * @return Response
-       * @throws RestException
-       */
-      public Response<JsonElement> put(Object body, String... routes) throws RestException {
-        return put(body, JsonElement.class, routes);
-      }
-
-      /**
-       * Execute a DELETE as transformed into the provided type.
+       * Execute a DELETE with the optional route params.
        * 
        * @param type expected return type or class.
        * @param routes optional string list of routes.
        * @return Response
        * @throws RestException
        */
-      public <R> Response<R> delete(Type type, String... routes) throws RestException {
-        return execute(this, null, Method.DELETE, type, routes);
-      }
-
-      /**
-       * Execute a DELETE as a JSONElement.
-       * 
-       * @param routes
-       * @param routes optional string list of routes.
-       * @return Response
-       * @throws RestException
-       */
-      public Response<JsonElement> delete(String... routes) throws RestException {
-        return delete(JsonElement.class, routes);
+      public Response delete(String... routes) throws RestException {
+        return execute(this, null, Method.DELETE, routes);
       }
 
     }
@@ -327,10 +258,10 @@ public abstract class Rest<T> {
      *
      * @param <T>
      */
-    public static class Response<R> {
-      private R result;
+    public class Response {
+      private Object result;
       private int code, length;
-      private String message;
+      private String message, contentType;
 
       /**
        * Does this response contain a non-null value for type T?
@@ -341,13 +272,61 @@ public abstract class Rest<T> {
         return result != null;
       }
 
+      public JsonObject asJsonObject() throws RestException {
+        return as(JsonObject.class);
+      }
+
+      public String asString() throws RestException {
+        return as(String.class);
+      }
+
+      public InputStream asStream() throws RestException {
+        return as(InputStream.class);
+      }
+
       /**
-       * The payload of the response.
+       * Converts the result (if present) to the requested type (if necessary). Possible types are
+       * String (for text responses), JsonElement (for json content types), and InputStream (for all
+       * other types).
        * 
-       * @return result of type T.
+       * <p>
+       * JsonElement types can be converted to other types as appropriate.
+       * 
+       * @param type
+       * @return
+       * @throws RestException
        */
-      public R getResult() {
-        return result;
+      @SuppressWarnings("unchecked")
+      public <T> T as(Type type) throws RestException {
+        if (result == null) {
+          return null;
+        }
+        if (result instanceof InputStream) {
+          if (type.equals(InputStream.class)) {
+            return (T) result;
+          }
+          throw new RestException("Cannot convert streaming response type [" + type.getTypeName() + "]");
+        }
+        if (result instanceof JsonElement) {
+          if (type.equals(String.class)) {
+            return (T) serializer().toJson(result);
+          }
+          if (type.equals(JsonArray.class)) {
+            return (T) ((JsonElement) result).getAsJsonArray();
+          }
+          if (type.equals(JsonObject.class)) {
+            return (T) ((JsonElement) result).getAsJsonObject();
+          }
+          if (type.equals(JsonElement.class)) {
+            return (T) result;
+          }
+          return serializer().fromJson((JsonElement) result, type);
+        } else {
+          if (type.equals(String.class)) {
+            return (T) result.toString();
+          }
+          return serializer().fromJson(result.toString(), type);
+        }
       }
 
       /**
@@ -376,6 +355,18 @@ public abstract class Rest<T> {
       public String getMessage() {
         return message;
       }
+
+      /**
+       * The content type of the response.
+       * 
+       * @return
+       */
+      public String getContentType() {
+        return contentType;
+      }
+
+
+
     }
 
     @Override
@@ -383,11 +374,10 @@ public abstract class Rest<T> {
       return this;
     }
 
-    @SuppressWarnings("unchecked")
-    protected <R> Response<R> execute(Request request, Object body, Method method, Type type, String... routes) throws RestException {
-      Response<R> response = new Response<R>();
+    protected Response execute(Request request, Object body, Method method, String... routes) throws RestException {
+      Response response = new Response();
       HttpURLConnection connection = null;
-      boolean streaming = type.equals(InputStream.class), multipart = body != null && body instanceof Form;
+      boolean multipart = body != null && body instanceof Form, streaming = false;
       try {
         // Swap the route params into the url
         String furl = new StringBuilder(url).append(request.url).append(request.query == null ? "" : request.query).toString();
@@ -459,13 +449,15 @@ public abstract class Rest<T> {
         }
         response.code = connection.getResponseCode();
         response.message = connection.getResponseMessage();
-        response.length = streaming ? connection.getContentLength() : -1;
+        response.length = connection.getContentLength();
+        response.contentType = connection.getContentType();
         if (response.code >= 200 && response.code < 400) {
-          if (streaming) {
-            response.result = (R) new AutocloseConnectionStream(connection, connection.getInputStream());
-          } else {
+          if (response.contentType.matches(".*(text|json).*")) {
             String result = utils.asString(connection.getInputStream());
-            response.result = (R) (type.equals(String.class) ? result : request.serializer().fromJson(result, type));
+            response.result = (response.contentType.contains("text") ? result : request.serializer().fromJson(result, JsonElement.class));
+          } else {
+            response.result = new AutocloseConnectionStream(connection, connection.getInputStream());
+            streaming = true;
           }
         }
       } catch (ProtocolException e) {
