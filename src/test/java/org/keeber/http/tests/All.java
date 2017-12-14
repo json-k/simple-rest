@@ -59,11 +59,17 @@ public class All {
   @Test
   public void test4() throws RestException {
     String FILE_CONTENT = "Mary had a little lamb.";
-    Response response = Rest.newClient(root).json().newRequest("post").post(new Rest.Form().put("param1", "value1").put("file1", "upload.txt", FILE_CONTENT));
+    Response response = Rest.newClient(root).json().newRequest("post").post(new Rest.MultipartForm().put("param1", "value1").put("file1", "upload.txt", FILE_CONTENT));
 
     assertEquals("Response code NOT 200 [" + response.getCode() + "].", 200, response.getCode());
-
     assertEquals("File content passed incorrectly.", FILE_CONTENT, response.<JsonObject>as(JsonObject.class).get("files").getAsJsonObject().get("file1").getAsString());
+    assertEquals("Wrong form parameter value.", "value1", response.<JsonObject>as(JsonObject.class).get("form").getAsJsonObject().get("param1").getAsString());
+  }
+
+  @Test
+  public void test5() throws RestException {
+    Response response = Rest.newClient(root).newRequest("post").post(new Rest.XForm().put("param1", "value1").put("param2", "value2"));
+
     assertEquals("Wrong form parameter value.", "value1", response.<JsonObject>as(JsonObject.class).get("form").getAsJsonObject().get("param1").getAsString());
   }
 

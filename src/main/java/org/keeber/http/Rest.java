@@ -377,7 +377,7 @@ public abstract class Rest<T> {
     protected Response execute(Request request, Object body, Method method, String... routes) throws RestException {
       Response response = new Response();
       HttpURLConnection connection = null;
-      boolean multipart = body != null && body instanceof Form, streaming = false;
+      boolean multipart = body != null && body instanceof MultipartForm, streaming = false;
       try {
         // Swap the route params into the url
         String furl = new StringBuilder(url).append(request.url).append(request.query == null ? "" : request.query).toString();
@@ -405,6 +405,9 @@ public abstract class Rest<T> {
         if (multipart) {
           connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + (boundary = "==" + System.currentTimeMillis() + "=="));
         }
+        if (body instanceof XForm) {
+          connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+        }
         //
         connection.setDoInput(true);
         connection.setDoOutput(body != null);
@@ -412,12 +415,12 @@ public abstract class Rest<T> {
         // Request BODY
         if (body != null) {
           if (multipart) {
-            Form form = (Form) body;
+            MultipartForm form = (MultipartForm) body;
             OutputStream os;
             PrintWriter wt = new PrintWriter(new OutputStreamWriter(os = new BufferedOutputStream(connection.getOutputStream()), utils.UTF_8), true);
             for (Entry<String, Object> entry : form.data.entrySet()) {
-              if (entry.getValue() instanceof Form.FileEntry) {
-                Form.FileEntry fileEntry = (Form.FileEntry) entry.getValue();
+              if (entry.getValue() instanceof MultipartForm.FileEntry) {
+                MultipartForm.FileEntry fileEntry = (MultipartForm.FileEntry) entry.getValue();
                 wt.append("--" + boundary).append(utils.LF);
                 wt.append("Content-Disposition: form-data; name=\"").append(entry.getKey()).append("\"; filename=\"").append(fileEntry.filename).append("\"").append(utils.LF);
                 wt.append("Content-Type: ").append(HttpURLConnection.guessContentTypeFromName(fileEntry.filename)).append(utils.LF);
@@ -441,6 +444,8 @@ public abstract class Rest<T> {
             InputStream is;
             if (body instanceof InputStream) {
               is = (InputStream) body;
+            } else if (body instanceof XForm) {
+              is = new ByteArrayInputStream(((XForm) body).data.getBytes(utils.UTF_8));
             } else {
               is = new ByteArrayInputStream((body instanceof String ? (String) body : request.serializer().toJson(body)).getBytes(utils.UTF_8));
             }
@@ -600,13 +605,27 @@ public abstract class Rest<T> {
     }
   }
 
+  public static class XForm {
+    private String data = "";
+
+    public XForm put(String key, String value) {
+      try {
+        data = (data.length() > 0 ? data + "&" : "") + key + "=" + URLEncoder.encode(value, utils.UTF_8);
+      } catch (UnsupportedEncodingException e) {
+        throw new RuntimeException(e.getMessage(), e);
+      }
+      return this;
+    }
+
+  }
+
   /**
    * A HTTP Form representation.
    * 
    * @author Jason Keeber <jason@keeber.org>
    *
    */
-  public static class Form {
+  public static class MultipartForm {
     private Map<String, Object> data = new HashMap<String, Object>();
 
     /**
@@ -617,7 +636,7 @@ public abstract class Rest<T> {
      * @param value the form value.
      * @return Form
      */
-    public Form put(String key, Object value) {
+    public MultipartForm put(String key, Object value) {
       data.put(key, value);
       return this;
     }
@@ -630,7 +649,7 @@ public abstract class Rest<T> {
      * @param stream the file content.
      * @return Form
      */
-    public Form put(String key, String filename, InputStream stream) {
+    public MultipartForm put(String key, String filename, InputStream stream) {
       data.put(key, new FileEntry(filename, stream));
       return this;
     }
@@ -643,7 +662,7 @@ public abstract class Rest<T> {
      * @param filecontent string file content.
      * @return Form
      */
-    public Form put(String key, String filename, String filecontent) {
+    public MultipartForm put(String key, String filename, String filecontent) {
       try {
         data.put(key, new FileEntry(filename, new ByteArrayInputStream(filecontent.getBytes(utils.UTF_8))));
       } catch (UnsupportedEncodingException e) {
