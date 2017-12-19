@@ -49,7 +49,7 @@ Default headers are copied from the REST instance when the request is created.
 Form posts are easy, as are sending objects as the message body:
 
 ```java
-Rest.Client.Response response1 = request.post(new Rest.Form().put("param1", "myvalue"));
+Rest.Client.Response response1 = request.post(new Rest.XForm().add("param1", "myvalue"));
 
 Rest.Client.Response response2 = request.put(new TotallyGreatObject());
 ```
@@ -59,13 +59,21 @@ Notice that request objects can be called with different methods.
 Basic responses should be handled automatically - content types with "text" return a String, "json" returns a JsonElement, and all others return an InputStream (please remember to close it):
 
 ```java
-Rest.Client.Response<String> response = request.post(new Rest.Form().put("param1", "myvalue");
+Rest.Client.Response response = request.post(new Rest.MultipartForm().add("param1", "myvalue");
 System.out.println(response.as(String.class);
 
-Rest.Client.Response response = request.post(new Rest.Form().put("param1", "some other value"));
+Rest.Client.Response response = request.post(new Rest.XForm().add("param1", "some other value"));
 response.as(InputStream.class);
 ```
 
+Streaming things can be done by passing an input steam or by creating a Payload (an interface) via the io package.
+
+```java
+Rest.Client.Response response = request.post(Rest.io.newPayload(is, 209889));
+```
+
+If the lengths of all of the streams are known, so the content length can be determined - the HTTP request is sent in streaming mode (there is no local caching before sending).
+
 # TODO
 
-Probably change everything again (add more unit tests).
+Probably change everything **again** (add more unit tests).

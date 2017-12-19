@@ -8,8 +8,6 @@ import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.OutputStreamWriter;
-import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Type;
 import java.net.HttpURLConnection;
@@ -18,6 +16,8 @@ import java.net.ProtocolException;
 import java.net.URL;
 import java.net.URLEncoder;
 import java.util.HashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
@@ -98,7 +98,7 @@ public abstract class Rest<T> {
    * @return Rest
    */
   public T basic(String username, String password) {
-    return header(AUTH, "Basic " + utils.encode(username + ":" + password));
+    return header(AUTH, "Basic " + io.encode(username + ":" + password));
   }
 
   /**
@@ -176,7 +176,7 @@ public abstract class Rest<T> {
        */
       public Request query(String name, String value) {
         try {
-          query = (query == null ? "?" : query + "&") + name + "=" + URLEncoder.encode(value, utils.UTF_8);
+          query = (query == null ? "?" : query + "&") + name + "=" + URLEncoder.encode(value, io.UTF_8);
         } catch (UnsupportedEncodingException e) {
           throw new RuntimeException(e.getMessage(), e);
         }
@@ -377,7 +377,19 @@ public abstract class Rest<T> {
     protected Response execute(Request request, Object body, Method method, String... routes) throws RestException {
       Response response = new Response();
       HttpURLConnection connection = null;
-      boolean multipart = body != null && body instanceof MultipartForm, streaming = false;
+      Payload payload = null;
+      if (body != null) {
+        if (body instanceof Payload) {
+          payload = (Payload) body;
+        } else if (body instanceof InputStream) {
+          payload = io.newPayload((InputStream) body);
+        } else if (body instanceof String) {
+          payload = io.newPayload((String) body);
+        } else {
+          payload = io.newPayload(request.serializer().toJson(body), "application/json");
+        }
+      }
+      boolean streaming = false;
       try {
         // Swap the route params into the url
         String furl = new StringBuilder(url).append(request.url).append(request.query == null ? "" : request.query).toString();
@@ -385,11 +397,16 @@ public abstract class Rest<T> {
           throw new RestException("Even number of route paramaters expected [" + routes.length + "]");
         }
         for (int i = 0; i < routes.length; i += 2) {
-          furl = furl.replaceAll("(%7B|\\{)" + routes[i] + "(%7D|\\})", URLEncoder.encode(routes[i + 1], utils.UTF_8));
+          furl = furl.replaceAll("(%7B|\\{)" + routes[i] + "(%7D|\\})", URLEncoder.encode(routes[i + 1], io.UTF_8));
         }
         // Create the connection & set the method
         connection = (HttpURLConnection) new URL(furl).openConnection();
         connection.setRequestMethod(method.toString());
+        // Set the content type - which might be overridden by one of the headers.
+        if (payload != null) {
+          System.out.println("CONTENT:" + payload.getContentType());
+          connection.setRequestProperty("Content-Type", payload.getContentType());
+        }
         // Set the headers
         {
           for (Entry<String, String> header : headers.entrySet()) {
@@ -398,59 +415,18 @@ public abstract class Rest<T> {
           for (Entry<String, String> header : request.headers.entrySet()) {
             connection.setRequestProperty(header.getKey(), header.getValue());
           }
+          // If the content is streamable we set stream mode.
+          if (payload != null && (payload.isStreamable() && payload.getLength() > 0)) {
+            // connection.setFixedLengthStreamingMode(payload.getLength());
+            // connection.setRequestProperty("Content-length", payload.getLength() + "");
+          }
         }
-
-        //
-        String boundary = null;
-        if (multipart) {
-          connection.setRequestProperty("Content-Type", "multipart/form-data; boundary=" + (boundary = "==" + System.currentTimeMillis() + "=="));
-        }
-        if (body instanceof XForm) {
-          connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-        }
-        //
         connection.setDoInput(true);
         connection.setDoOutput(body != null);
         connection.connect();
         // Request BODY
-        if (body != null) {
-          if (multipart) {
-            MultipartForm form = (MultipartForm) body;
-            OutputStream os;
-            PrintWriter wt = new PrintWriter(new OutputStreamWriter(os = new BufferedOutputStream(connection.getOutputStream()), utils.UTF_8), true);
-            for (Entry<String, Object> entry : form.data.entrySet()) {
-              if (entry.getValue() instanceof MultipartForm.FileEntry) {
-                MultipartForm.FileEntry fileEntry = (MultipartForm.FileEntry) entry.getValue();
-                wt.append("--" + boundary).append(utils.LF);
-                wt.append("Content-Disposition: form-data; name=\"").append(entry.getKey()).append("\"; filename=\"").append(fileEntry.filename).append("\"").append(utils.LF);
-                wt.append("Content-Type: ").append(HttpURLConnection.guessContentTypeFromName(fileEntry.filename)).append(utils.LF);
-                wt.append("Content-Transfer-Encoding: binary").append(utils.LF).append(utils.LF);
-                wt.flush();
-                utils.copy(fileEntry.stream, os, false);
-                utils.close(fileEntry.stream);
-                wt.append(utils.LF);
-                wt.flush();
-              } else {
-                wt.append("--" + boundary).append(utils.LF);
-                wt.append("Content-Disposition: form-data; name=\"").append(entry.getKey()).append("\"").append(utils.LF);
-                wt.append("Content-Type: text/plain; charset=").append(utils.UTF_8).append(utils.LF).append(utils.LF);
-                wt.append(entry.getValue() instanceof String ? entry.getValue() + "" : request.serializer().toJson(entry.getValue()));
-                wt.append(utils.LF).flush();
-              }
-            }
-            wt.append("--" + boundary + "--").append(utils.LF).flush();
-            wt.close();
-          } else {
-            InputStream is;
-            if (body instanceof InputStream) {
-              is = (InputStream) body;
-            } else if (body instanceof XForm) {
-              is = new ByteArrayInputStream(((XForm) body).data.getBytes(utils.UTF_8));
-            } else {
-              is = new ByteArrayInputStream((body instanceof String ? (String) body : request.serializer().toJson(body)).getBytes(utils.UTF_8));
-            }
-            utils.copy(is, connection.getOutputStream(), true);
-          }
+        if (payload != null) {
+          payload.write(new BufferedOutputStream(connection.getOutputStream()));
         }
         response.code = connection.getResponseCode();
         response.message = connection.getResponseMessage();
@@ -458,7 +434,7 @@ public abstract class Rest<T> {
         response.contentType = connection.getContentType();
         if (response.code >= 200 && response.code < 400) {
           if (response.contentType.matches(".*(text|json).*")) {
-            String result = utils.asString(connection.getInputStream());
+            String result = io.asString(connection.getInputStream());
             response.result = (response.contentType.contains("text") ? result : request.serializer().fromJson(result, JsonElement.class));
           } else {
             response.result = new AutocloseConnectionStream(connection, connection.getInputStream());
@@ -524,12 +500,118 @@ public abstract class Rest<T> {
   }
 
   /**
-   * Internal utility class.
+   * IO utility class.
    * 
    * @author Jason Keeber <jason@keeber.org>
    *
    */
-  public static class utils {
+  public static class io {
+    private static class StringPayload implements Payload {
+      private String content;
+      private String contentType = "text/plain";
+
+      private StringPayload(String content) {
+        this.content = content;
+      }
+
+      private StringPayload(String content, String contentType) {
+        this.content = content;
+        this.contentType = contentType;
+      }
+
+      @Override
+      public boolean isStreamable() {
+        return true;
+      }
+
+      @Override
+      public long getLength() {
+        return content.getBytes().length;
+      }
+
+      @Override
+      public void write(OutputStream os) throws IOException {
+        io.copy(new ByteArrayInputStream(content.getBytes()), os, true);
+      }
+
+      @Override
+      public String getContentType() {
+        return contentType;
+      }
+
+    }
+
+    private static class InputStreamPayload implements Payload {
+      private InputStream is;
+      private String contentType = "application/octet-stream";
+      private long length = -1;
+
+      private InputStreamPayload(InputStream is) {
+        this.is = is;
+      }
+
+      private InputStreamPayload(InputStream is, long length) {
+        this.is = is;
+        this.length = length;
+      }
+
+      private InputStreamPayload(InputStream is, long length, String contentType) {
+        this.is = is;
+        this.length = length;
+        this.contentType = contentType;
+      }
+
+      private InputStreamPayload(InputStream is, String contentType) {
+        this.is = is;
+        this.contentType = contentType;
+      }
+
+      @Override
+      public boolean isStreamable() {
+        return false;
+      }
+
+      @Override
+      public long getLength() {
+        return length;
+      }
+
+      @Override
+      public void write(OutputStream os) throws IOException {
+        io.copy(is, os, true);
+      }
+
+      @Override
+      public String getContentType() {
+        return contentType;
+      }
+
+    }
+
+    public static Payload newPayload(String content, String contentType) {
+      return new StringPayload(content, contentType);
+    }
+
+    public static Payload newPayload(String content) {
+      return new StringPayload(content);
+    }
+
+    public static Payload newPayload(InputStream is, long length, String contentType) {
+      return new InputStreamPayload(is, length, contentType);
+    }
+
+    public static Payload newPayload(InputStream is, long length) {
+      return new InputStreamPayload(is, length);
+    }
+
+    public static Payload newPayload(InputStream is, String contentType) {
+      return new InputStreamPayload(is, contentType);
+    }
+
+    public static Payload newPayload(InputStream is) {
+      return new InputStreamPayload(is);
+    }
+
     private static final String UTF_8 = "UTF-8";
     private static final String LF = "\r\n";
 
@@ -543,8 +625,8 @@ public abstract class Rest<T> {
         os.flush();
       } finally {
         if (close) {
-          utils.close(is);
-          utils.close(os);
+          io.close(is);
+          io.close(os);
         }
       }
     }
@@ -575,7 +657,7 @@ public abstract class Rest<T> {
       char[] tbl = {'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u',
           'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '+', '/'};
 
-      StringBuilder buffer = new StringBuilder();
+      StringBuffer buffer = new StringBuffer();
       int pad = 0;
       for (int i = 0; i < data.length; i += 3) {
 
@@ -605,28 +687,49 @@ public abstract class Rest<T> {
     }
   }
 
-  public static class XForm {
-    private String data = "";
-
-    public XForm put(String key, String value) {
-      try {
-        data = (data.length() > 0 ? data + "&" : "") + key + "=" + URLEncoder.encode(value, utils.UTF_8);
-      } catch (UnsupportedEncodingException e) {
-        throw new RuntimeException(e.getMessage(), e);
-      }
-      return this;
-    }
-
-  }
-
   /**
    * A HTTP Form representation.
    * 
    * @author Jason Keeber <jason@keeber.org>
    *
    */
-  public static class MultipartForm {
-    private Map<String, Object> data = new HashMap<String, Object>();
+  public static class MultipartForm implements Payload {
+    private static class Part {
+      private InputStream is;
+      private long length;
+
+      private Part(String content) {
+        try {
+          byte[] bytes = content.getBytes(io.UTF_8);
+          this.length = bytes.length;
+          this.is = new ByteArrayInputStream(bytes);
+        } catch (UnsupportedEncodingException e) {
+          //
+        }
+      }
+
+      private Part(InputStream is, long length) {
+        this.is = is;
+        this.length = length;
+      }
+
+    }
+
+    private String boundary = "AEX0908096763745435x0";
+    private String tail = "--" + boundary + "--" + io.LF;
+    private boolean streamable = true;
+    private long length = 0;
+
+    private List<Part> parts = new LinkedList<Part>();
+
+    private MultipartForm add(Part part) {
+      if (part.length < 0) {
+        streamable = false;
+      }
+      length = length + part.length;
+      parts.add(part);
+      return this;
+    }
 
     /**
      * Add the object to this form with the provided key. None-string objects will be serialized
@@ -636,22 +739,48 @@ public abstract class Rest<T> {
      * @param value the form value.
      * @return Form
      */
-    public MultipartForm put(String key, Object value) {
-      data.put(key, value);
-      return this;
+    public MultipartForm add(String key, String value) {
+      StringBuffer b = new StringBuffer();
+      b.append("--" + boundary).append(io.LF);
+      b.append("Content-Disposition: form-data; name=\"").append(key).append("\"").append(io.LF);
+      b.append("Content-Type: text/plain; charset=").append(io.UTF_8).append(io.LF).append(io.LF);
+      try {
+        b.append(URLEncoder.encode(value, io.UTF_8));
+      } catch (UnsupportedEncodingException e) {
+        throw new RuntimeException(e);
+      }
+      b.append(io.LF);
+      return add(new Part(b.toString()));
+    }
+
+    public MultipartForm add(String key, String filename, InputStream stream) {
+      return add(key, filename, stream, -1);
     }
 
     /**
-     * Add the provided stream as a file to the Form.
+     * Add the provided stream as a file to the Form. There is another method without the length if
+     * it is unknown - BUT it must be present to enable true streaming.
      * 
      * @param key the form name.
      * @param filename the file upload name.
      * @param stream the file content.
+     * @param length of the file content.
      * @return Form
      */
-    public MultipartForm put(String key, String filename, InputStream stream) {
-      data.put(key, new FileEntry(filename, stream));
-      return this;
+    public MultipartForm add(String key, String filename, InputStream stream, long length) {
+      StringBuffer b = new StringBuffer();
+      b.append("--" + boundary).append(io.LF);
+      b.append("Content-Disposition: form-data; name=\"").append(key).append("\"; filename=\"");
+      try {
+        b.append(URLEncoder.encode(filename, io.UTF_8)).append("\"").append(io.LF);
+      } catch (UnsupportedEncodingException e) {
+        throw new RuntimeException(e);
+      }
+      b.append("Content-Type: ").append(HttpURLConnection.guessContentTypeFromName(filename)).append(io.LF);
+      b.append("Content-Transfer-Encoding: binary").append(io.LF).append(io.LF);
+      add(new Part(b.toString()));
+      add(new Part(stream, length));
+      return add(new Part(io.LF + ""));
     }
 
     /**
@@ -662,28 +791,105 @@ public abstract class Rest<T> {
      * @param filecontent string file content.
      * @return Form
      */
-    public MultipartForm put(String key, String filename, String filecontent) {
+    public MultipartForm add(String key, String filename, String content) {
       try {
-        data.put(key, new FileEntry(filename, new ByteArrayInputStream(filecontent.getBytes(utils.UTF_8))));
+        byte[] file = content.getBytes(io.UTF_8);
+        return add(key, filename, new ByteArrayInputStream(file), file.length);
       } catch (UnsupportedEncodingException e) {
-        throw new RuntimeException(e);
+        return null;
       }
-      return this;
     }
 
-    private static class FileEntry {
-      private InputStream stream;
-      private String filename;
 
-      public FileEntry(String filename, InputStream stream) {
-        this.filename = filename;
-        this.stream = stream;
+    @Override
+    public boolean isStreamable() {
+      return streamable;
+    }
+
+
+    @Override
+    public long getLength() {
+      try {
+        return length + tail.getBytes(io.UTF_8).length;
+      } catch (UnsupportedEncodingException e) {
+        return 0;
       }
+    }
 
+
+    @Override
+    public void write(OutputStream os) throws IOException {
+      for (Part part : parts) {
+        io.copy(part.is, os, false);
+      }
+      os.write(tail.getBytes(io.UTF_8));
+      os.flush();
+      os.close();
+    }
+
+    @Override
+    public String getContentType() {
+      return "multipart/form-data; boundary=" + boundary;
     }
 
   }
 
+  public static class XForm implements Payload {
+    private String data = "";
+
+    public XForm add(String key, String value) {
+      try {
+        data = (data.length() > 0 ? data + "&" : "") + key + "=" + URLEncoder.encode(value, io.UTF_8);
+      } catch (UnsupportedEncodingException e) {
+        throw new RuntimeException(e.getMessage(), e);
+      }
+      return this;
+    }
+
+    @Override
+    public long getLength() {
+      try {
+        return data.getBytes(io.UTF_8).length;
+      } catch (UnsupportedEncodingException e) {
+        throw new RuntimeException(e);
+      }
+    }
+
+    @Override
+    public void write(OutputStream os) throws IOException {
+      io.copy(new ByteArrayInputStream(data.getBytes(io.UTF_8)), os, true);
+    }
+
+    @Override
+    public String getContentType() {
+      return "application/x-www-form-urlencoded";
+    }
+
+    @Override
+    public boolean isStreamable() {
+      return true;
+    }
+
+  }
+
+  /**
+   * A basic payload for HTTP post / put methods - really used to determine content length to turn
+   * on actual streaming (ie: not cached).
+   * 
+   * @author Jason Keeber <jason@keeber.org>
+   *
+   */
+  private static interface Payload {
+
+    public boolean isStreamable();
+
+    public long getLength();
+
+    public void write(OutputStream os) throws IOException;
+
+    public String getContentType();
+
+  }
 
 }
 
