@@ -404,7 +404,6 @@ public abstract class Rest<T> {
         connection.setRequestMethod(method.toString());
         // Set the content type - which might be overridden by one of the headers.
         if (payload != null) {
-          System.out.println("CONTENT:" + payload.getContentType());
           connection.setRequestProperty("Content-Type", payload.getContentType());
         }
         // Set the headers
@@ -417,8 +416,8 @@ public abstract class Rest<T> {
           }
           // If the content is streamable we set stream mode.
           if (payload != null && (payload.isStreamable() && payload.getLength() > 0)) {
-            // connection.setFixedLengthStreamingMode(payload.getLength());
-            // connection.setRequestProperty("Content-length", payload.getLength() + "");
+            connection.setFixedLengthStreamingMode(payload.getLength());
+            connection.setRequestProperty("Content-length", payload.getLength() + "");
           }
         }
         connection.setDoInput(true);
@@ -686,6 +685,9 @@ public abstract class Rest<T> {
       return buffer.toString();
     }
   }
+  
+  
+ 
 
   /**
    * A HTTP Form representation.
