@@ -285,6 +285,20 @@ public abstract class Rest<T> {
       }
 
       /**
+       * In the case that the result of the call is closeable - it will close the stream - which
+       * will release the underlying connection. This might need to be called for certain responses
+       * that contain no content or no content type - as they will appear to be streaming.
+       * 
+       * @return this
+       */
+      public Response dispose() {
+        if (result instanceof Closeable) {
+          io.close((Closeable) result);
+        }
+        return this;
+      }
+
+      /**
        * Converts the result (if present) to the requested type (if necessary). Possible types are
        * String (for text responses), JsonElement (for json content types), and InputStream (for all
        * other types).
@@ -432,7 +446,7 @@ public abstract class Rest<T> {
         response.length = connection.getContentLength();
         response.contentType = connection.getContentType();
         if (response.code >= 200 && response.code < 400) {
-          if (response.contentType.matches(".*(text|json).*")) {
+          if (response.contentType != null && response.contentType.matches(".*(text|json).*")) {
             String result = io.asString(connection.getInputStream());
             response.result = (response.contentType.contains("text") ? result : request.serializer().fromJson(result, JsonElement.class));
           } else {
@@ -685,9 +699,8 @@ public abstract class Rest<T> {
       return buffer.toString();
     }
   }
-  
-  
- 
+
+
 
   /**
    * A HTTP Form representation.
