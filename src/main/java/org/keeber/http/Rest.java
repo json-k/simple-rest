@@ -581,7 +581,7 @@ public abstract class Rest<T> {
 
       @Override
       public boolean isStreamable() {
-        return false;
+        return length > 0;
       }
 
       @Override
