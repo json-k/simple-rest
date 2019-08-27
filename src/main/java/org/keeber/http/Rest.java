@@ -194,7 +194,7 @@ public abstract class Rest<T> {
        * @param value (optional) of the parameter - allowing it to be null
        * @return Request
        */
-      public Request query(String name, Optional<Object> value) {
+      public Request query(String name, Optional<?> value) {
         if (value.isPresent()) {
           return query(name, value.get().toString());
         }
