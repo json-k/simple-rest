@@ -20,6 +20,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -179,6 +180,23 @@ public abstract class Rest<T> {
           query = (query == null ? "?" : query + "&") + name + "=" + URLEncoder.encode(value, io.UTF_8);
         } catch (UnsupportedEncodingException e) {
           throw new RuntimeException(e.getMessage(), e);
+        }
+        return this;
+      }
+
+      /**
+       * Add query parameters to this request - this method delegates to {@link #query(String, String)}
+       *
+       * <p>
+       * When the Optiona value is empty the parameter is ommited from the Request.
+       * 
+       * @param name of the parameter
+       * @param value (optional) of the parameter - allowing it to be null
+       * @return Request
+       */
+      public Request query(String name, Optional<Object> value) {
+        if (value.isPresent()) {
+          return query(name, value.get().toString());
         }
         return this;
       }

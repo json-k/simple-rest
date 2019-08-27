@@ -10,7 +10,7 @@ buildscript {
      }
  }
 
-version = '0.9.3'
+version = '0.9.4'
 group = 'org.keeber'
 sourceCompatibility  = 1.6
 targetCompatibility  = 1.6
@@ -27,9 +27,7 @@ javadoc {
 	failOnError = false
 }
 
-
-
- modifyPom {
+modifyPom {
      project {
          name 'Java REST Client'
          description 'A very simple REST client.'
